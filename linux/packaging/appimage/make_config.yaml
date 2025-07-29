@@ -1,0 +1,13 @@
+display_name: TestApp
+
+icon: misc/icon.png
+
+keywords:
+  - Test
+
+generic_name: TestApp
+
+metainfo: linux/packaging/testapp.appdata.xml
+
+categories:
+  - Finance

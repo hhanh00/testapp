@@ -1,0 +1,67 @@
+name: Build and Release iOS
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    tags:
+      - testapp-v*
+
+permissions:
+  contents: write
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      - uses: chrisdickinson/setup-yq@latest
+        with:
+          yq-version: v4.45.4
+      - name: select Xcode version
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '16.1'
+      - name: check Xcode version
+        run: /usr/bin/xcodebuild -version
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+      - name: Check out code
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Get version number
+        id: version
+        run: |
+          RELEASE_VERSION=$(yq '.version' pubspec.yaml)
+          echo "result=$RELEASE_VERSION" >> $GITHUB_OUTPUT
+      - name: Install python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install codemagic
+        run: pip3 install codemagic-cli-tools
+      - name: Install Codesign certs
+        run: ./misc/codesign-ios.sh
+        env:
+          KEYCHAIN_PWD: azB27DoYCFe5kzd3
+          APPLE_DEV_CERT_PWD: ${{ secrets.JKS_PASSWORD }}
+      - name: Build
+        run: |
+          xcode-project use-profiles
+          flutter build ipa --export-options-plist=ios/export_options.plist
+          mv ./build/ios/ipa/testapp.ipa ./build/ios/ipa/${RELEASE_VERSION}.ipa
+        env:
+          RELEASE_VERSION: testapp-${{ steps.version.outputs.result }}
+      - name: Upload ipa artifact
+        uses: actions/upload-artifact@v4
+        with:
+          path: ./build/ios/ipa/*.ipa
+      - name: Create Release
+        if: startsWith(github.ref_name, 'testapp-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./build/ios/ipa/*.ipa
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

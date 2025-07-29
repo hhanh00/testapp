@@ -1,0 +1,48 @@
+name: Build and Release Windows Package
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    tags:
+      - testapp-v*
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+      - name: Check out code
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Install packages
+        run: |
+          dart pub global activate fastforge
+      - name: Build
+        run: |
+          fastforge package --platform=windows --targets=exe
+      - name: Indentify package
+        id: package
+        shell: bash
+        run: |
+          PKG_PATH=$(find dist/ -type f -name '*.exe' | head -n 1)
+          echo "Found package: $PKG_PATH"
+          echo "PKG_PATH=$PKG_PATH" >> $GITHUB_OUTPUT
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          path: ${{ steps.package.outputs.PKG_PATH }}
+      - name: Create Release
+        if: startsWith(github.ref_name, 'testapp-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.package.outputs.PKG_PATH }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
